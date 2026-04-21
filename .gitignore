@@ -1,0 +1,36 @@
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.opendb
+ipch/
+
+# Build outputs
+Debug/
+Release/
+x64/
+x86/
+*.dll
+*.exe
+*.lib
+*.exp
+
+# Intermediate files
+*.obj
+*.pch
+*.ilk
+*.pdb
+*.idb
+*.tlog
+*.lastbuildstate
+*.recipe
+*.log
+*.FileListAbsolute.txt
+*.Build.CppClean.log
+
+# Windows
+Thumbs.db
+Desktop.ini
