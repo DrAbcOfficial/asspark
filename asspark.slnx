@@ -2,5 +2,5 @@
   <Configurations>
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="asspark.vcxproj" />
+  <Project Path="asspark.vcxproj" Id="b3ca76f7-55cf-4402-9db6-93b0d3751dc0" />
 </Solution>

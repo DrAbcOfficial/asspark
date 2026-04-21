@@ -94,18 +94,29 @@ static void ServerActivate(edict_t* pEdictList, int edictCount, int clientMax) {
 		SET_META_RESULT(MRES_IGNORED);
 		return;
 	}
-	SET_META_RESULT(MRES_HANDLED);
+	
 	static auto serverManager = ASEXT_GetServerManager();
+	if (!serverManager) {
+		LOG_ERROR(PLID, "ERROR in angelscript hook: Server Manager is NULL!");
+		SET_META_RESULT(MRES_IGNORED);
+		return;
+	}
 	static auto& engine = serverManager->scriptEngine;
+	if (!engine) {
+		LOG_ERROR(PLID, "ERROR in angelscript hook: Engine is NULL!");
+		SET_META_RESULT(MRES_IGNORED);
+		return;
+	}
 
-	const auto INDEX_REQUEST = 95;
+	constexpr auto INDEX_REQUEST = 95;
 	void* pfnRequest = (*(void***)(engine))[INDEX_REQUEST];
 	hook_requestContext = gpMetaUtilFuncs->pfnInlineHook(pfnRequest, (void*)RequestContext, (void**)&pfnOldRequestContext, false);
 
-	const auto INDEX_RETURN = 96;
+	constexpr auto INDEX_RETURN = 96;
 	void* pfnReturn = (*(void***)(engine))[INDEX_RETURN];
 	hook_returnContext = gpMetaUtilFuncs->pfnInlineHook(pfnReturn, (void*)ReturnContext, (void**)&pfnOldReturnContext, false);
 	s_hooked = true;
+	SET_META_RESULT(MRES_HANDLED);
 }
 
 static DLL_FUNCTIONS gFunctionTable = {
