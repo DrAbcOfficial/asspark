@@ -1,9 +1,13 @@
-#include <stack>
 #include <chrono>
 #include <unordered_map>
 #include <functional>
 #include <memory>
 #include <format>
+#include <filesystem>
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
 
 #include <extdll.h>
 #include <meta_api.h>
@@ -20,72 +24,57 @@ public:
 	int line{};
 	int column{};
 	std::string section{};
-	size_t hash() const noexcept {
-		size_t h = std::hash<int>{}(line);
-		h ^= std::hash<int>{}(column)+0x9e3779b9 + (h << 6) + (h >> 2);
-		h ^= std::hash<std::string>{}(section)+0x9e3779b9 + (h << 6) + (h >> 2);
-		return h;
-	}
-};
-class asSparkTimePoint : public asSparkContextItem {
-public:
-	std::chrono::steady_clock::time_point start{};
-
-	std::chrono::steady_clock::duration stop() const {
-		auto end = std::chrono::high_resolution_clock::now();
-		return end - start;
-	}
+	
 };
 class asSparkItem : public asSparkContextItem {
 public:
 	asSparkItem() = default;
-	asSparkItem(std::unique_ptr<asSparkTimePoint> timepoint){
-		line = timepoint->line;
-		column = timepoint->column;
-		section = timepoint->section;
-		alltime = timepoint->stop();
-		called++;
-	}
 	std::chrono::steady_clock::duration alltime{};
 	uint64_t called{};
 };
-
 std::unordered_map<size_t, std::unique_ptr<asSparkItem>> s_All{};
-std::stack<std::unique_ptr<asSparkTimePoint>> s_TimeList{};
 
-static hook_t* hook_requestContext{};
-static asIScriptContext* (SC_SERVER_DECL* pfnOldRequestContext)(asIScriptEngine* engine SC_SERVER_DUMMYARG_NOCOMMA) = nullptr;
-static asIScriptContext* SC_SERVER_DECL RequestContext(asIScriptEngine* engine SC_SERVER_DUMMYARG_NOCOMMA) {
-	auto context = pfnOldRequestContext(engine, SC_SERVER_PASS_DUMMYARG_NOCOMMA);
-	
-	auto sparkTime = std::make_unique<asSparkTimePoint>(context);
-	sparkTime->start = std::chrono::high_resolution_clock::now();
-	s_TimeList.push(std::move(sparkTime));
-
-	return context;
-}
-
-static hook_t* hook_returnContext{};
-static void (SC_SERVER_DECL* pfnOldReturnContext)(asIScriptEngine* engine, SC_SERVER_DUMMYARG asIScriptContext* context) = nullptr;
-static void SC_SERVER_DECL ReturnContext(asIScriptEngine* engine, SC_SERVER_DUMMYARG asIScriptContext* context) {
-	if (s_TimeList.empty()) {
-		pfnOldReturnContext(engine, SC_SERVER_PASS_DUMMYARG context);
-		LOG_ERROR(PLID, "ERROR in angelscript return context: Stack is NULL!");
+static hook_t* hook_executeContext{};
+static void (SC_SERVER_DECL* pfnOldExecuteContext)(asIScriptContext* ctx SC_SERVER_DUMMYARG_NOCOMMA) = nullptr;
+static void SC_SERVER_DECL ExecuteContext(asIScriptContext* ctx SC_SERVER_DUMMYARG_NOCOMMA) {
+	if (CVAR_GET_FLOAT("spark_on") <= 0) {
+		pfnOldExecuteContext(ctx, SC_SERVER_PASS_DUMMYARG_NOCOMMA);
 		return;
 	}
-	std::unique_ptr<asSparkTimePoint> sparkTime = std::move(s_TimeList.top());
-	size_t hash = sparkTime->hash();
+	constexpr auto to_hash = [](int line, int column, const char* section) {
+		size_t h = std::hash<int>{}(line);
+		h ^= std::hash<int>{}(column)+0x9e3779b9 + (h << 6) + (h >> 2);
+		h ^= std::hash<std::string>{}(section)+0x9e3779b9 + (h << 6) + (h >> 2);
+		return h;
+	};
+	int column{};
+	const char* section{};
+	int line = ctx->GetLineNumber(0, &column, &section);
+	if (section == nullptr) {
+		pfnOldExecuteContext(ctx, SC_SERVER_PASS_DUMMYARG_NOCOMMA);
+		return;
+	}
+
+	size_t hash = to_hash(line, column, section);
+	auto start = std::chrono::high_resolution_clock::now();
+	pfnOldExecuteContext(ctx, SC_SERVER_PASS_DUMMYARG_NOCOMMA);
+	auto end = std::chrono::high_resolution_clock::now();
+	auto used_time = end - start;
+
 	auto iter = s_All.find(hash);
 	if (iter != s_All.end()) {
-		iter->second->alltime += sparkTime->stop();
+		iter->second->alltime += used_time;
 		iter->second->called++;
 	}
 	else {
-		auto allItem = std::make_unique<asSparkItem>(std::move(sparkTime));
+		auto allItem = std::make_unique<asSparkItem>();
+		allItem->line = line;
+		allItem->column = column;
+		allItem->section = section;
+		allItem->called = 1;
+		allItem->alltime = used_time;
 		s_All.emplace(hash, std::move(allItem));
 	}
-	s_TimeList.pop();
-	pfnOldReturnContext(engine, SC_SERVER_PASS_DUMMYARG context);
 }
 
 static bool s_hooked = false;
@@ -108,13 +97,12 @@ static void ServerActivate(edict_t* pEdictList, int edictCount, int clientMax) {
 		return;
 	}
 
-	constexpr auto INDEX_REQUEST = 95;
-	void* pfnRequest = (*(void***)(engine))[INDEX_REQUEST];
-	hook_requestContext = gpMetaUtilFuncs->pfnInlineHook(pfnRequest, (void*)RequestContext, (void**)&pfnOldRequestContext, false);
+	constexpr size_t EXCUTE_INDEX = 5;
+	asIScriptContext* ctx = engine->RequestContext();
+	void* pfnExecute = (*(void***)(ctx))[EXCUTE_INDEX];
+	hook_executeContext = gpMetaUtilFuncs->pfnInlineHook(pfnExecute, (void*)ExecuteContext, (void**)&pfnOldExecuteContext, false);
+	engine->ReturnContext(ctx);
 
-	constexpr auto INDEX_RETURN = 96;
-	void* pfnReturn = (*(void***)(engine))[INDEX_RETURN];
-	hook_returnContext = gpMetaUtilFuncs->pfnInlineHook(pfnReturn, (void*)ReturnContext, (void**)&pfnOldReturnContext, false);
 	s_hooked = true;
 	SET_META_RESULT(MRES_HANDLED);
 }
@@ -200,7 +188,7 @@ C_DLLEXPORT int GetEntityAPI2(DLL_FUNCTIONS* pFunctionTable,
 static void GameInitPost() {
 	static cvar_t cvar_spark = { (char*)"spark_on",(char*)"0", FCVAR_SERVER | FCVAR_EXTDLL | FCVAR_ARCHIVE | FCVAR_PRINTABLEONLY, 1.0f, nullptr };
 	CVAR_REGISTER(&cvar_spark);
-	g_engfuncs.pfnAddServerCommand(const_cast<char*>("spark_dump_all"), [](){
+	g_engfuncs.pfnAddServerCommand(const_cast<char*>("spark_dump"), [](){
 		constexpr std::string_view print_format = "|{}|{}|{}|{}|{}|\n";
 		g_engfuncs.pfnServerPrint((std::format(print_format, "Section", "Line", "Column", "Called", "Time(ms)")).c_str());
 		for (const auto& [hash, item] : s_All) {
@@ -208,28 +196,43 @@ static void GameInitPost() {
 			g_engfuncs.pfnServerPrint((std::format(print_format, item->section, item->line, item->column, item->called, us)).c_str());
 		}
 	});
-	g_engfuncs.pfnAddServerCommand(const_cast<char*>("spark_dump_timepoints"), [](){
-		constexpr std::string_view print_format = "|{}|{}|{}|{}|\n";
-		g_engfuncs.pfnServerPrint((std::format(print_format, "Section", "Line", "Column", "Elapsed(ms)")).c_str());
-		std::vector<std::unique_ptr<asSparkTimePoint>> temp;
-		temp.reserve(s_TimeList.size());
-		while (!s_TimeList.empty()) {
-			temp.push_back(std::move(s_TimeList.top()));
-			s_TimeList.pop();
+	g_engfuncs.pfnAddServerCommand(const_cast<char*>("spark_dump_file"), []() {
+		constexpr std::string_view print_format = "|{}|{}|{}|{}|{}|\n";
+		std::string buffer = std::format(print_format, "Section", "Line", "Column", "Called", "Time(ms)");
+		for (const auto& [hash, item] : s_All) {
+			auto us = std::chrono::duration_cast<std::chrono::microseconds>(item->alltime).count();
+			buffer += std::format(print_format, item->section, item->line, item->column, item->called, us);
 		}
-		for (auto it = temp.rbegin(); it != temp.rend(); ++it) {
-			auto us = std::chrono::duration_cast<std::chrono::microseconds>((*it)->stop()).count();
-			g_engfuncs.pfnServerPrint((std::format(print_format, (*it)->section, (*it)->line, (*it)->column, us)).c_str());
-			s_TimeList.push(std::move(*it));
+		auto now = std::chrono::system_clock::now();
+		std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
+		std::tm tm_buf;
+#ifdef _WIN32
+		localtime_s(&tm_buf, &now_time_t);
+#else
+		localtime_r(&now_time_t, &tm_buf);
+#endif
+		std::ostringstream oss;
+		oss << std::put_time(&tm_buf, "%Y%m%d_%H%M%S");
+		auto duration = now.time_since_epoch();
+		auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count() % 1000000000;
+		oss << "spark-" << std::setfill('0') << std::setw(9) << nanoseconds << ".txt";
+		std::filesystem::path current_dir = std::filesystem::current_path();
+		std::filesystem::path full_path = current_dir / oss.str();
+		std::ofstream file(full_path);
+		if (file.is_open()) {
+			file << buffer;
+#ifdef  close
+#undef close
+#endif //  close
+			file.close();
+			g_engfuncs.pfnServerPrint(std::format("Saved into {}", oss.str()).c_str());
 		}
-	});
-	g_engfuncs.pfnAddServerCommand(const_cast<char*>("spark_clear_all"), [](){
+		else {
+			g_engfuncs.pfnServerPrint(std::format("Saving failed: {}", oss.str()).c_str());
+		}
+		});
+	g_engfuncs.pfnAddServerCommand(const_cast<char*>("spark_clear"), [](){
 		s_All.clear();
-	});
-	g_engfuncs.pfnAddServerCommand(const_cast<char*>("spark_clear_timepoints"), [](){
-		while (!s_TimeList.empty()) {
-			s_TimeList.pop();
-		}
 	});
 	SET_META_RESULT(MRES_HANDLED);
 }
