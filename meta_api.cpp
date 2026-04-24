@@ -160,3 +160,37 @@ C_DLLEXPORT int Meta_Detach(PLUG_LOADTIME /* now */,
 	PL_UNLOAD_REASON /* reason */) {
 	return TRUE;
 }
+
+#include <h_export.h>
+
+//! Holds engine functionality callbacks
+enginefuncs_t g_engfuncs;
+globalvars_t  *gpGlobals;
+
+// Receive engine function table from engine.
+// This appears to be the _first_ DLL routine called by the engine, so we
+// do some setup operations here.
+void WINAPI GiveFnptrsToDll( enginefuncs_t* pengfuncsFromEngine, globalvars_t *pGlobals )
+{
+	memcpy(&g_engfuncs, pengfuncsFromEngine, sizeof(enginefuncs_t));
+	gpGlobals = pGlobals;
+}
+
+#include <enginecallback.h>		// ALERT()
+//=========================================================
+// UTIL_LogPrintf - Prints a logged message to console.
+// Preceded by LOG: ( timestamp ) < message >
+//=========================================================
+void UTIL_LogPrintf( const char *fmt, ... )
+{
+	va_list			argptr;
+	static char		string[1024];
+	
+	va_start ( argptr, fmt );
+	_vsnprintf ( string, sizeof(string), fmt, argptr );
+	va_end   ( argptr );
+
+	// Print to server console
+	ALERT( at_logged, "%s", string );
+}
+

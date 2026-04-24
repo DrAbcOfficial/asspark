@@ -83,9 +83,7 @@ include_directories(
 # Source files
 set(SOURCES
     dllapi.cpp
-    h_export.cpp
     meta_api.cpp
-    sdk_util.cpp
 )
 
 # Windows-specific source
@@ -95,7 +93,6 @@ endif()
 
 # Headers
 set(HEADERS
-    dlldef.h
     signatures.h
 )
 
