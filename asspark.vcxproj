@@ -11,15 +11,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="dlldef.h" />
     <ClInclude Include="signatures.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllapi.cpp" />
     <ClCompile Include="dllmain.cpp" />
-    <ClCompile Include="h_export.cpp" />
     <ClCompile Include="meta_api.cpp" />
-    <ClCompile Include="sdk_util.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>
