@@ -110,9 +110,28 @@ asspark/                          <- Repository root
    ```
 
 2. The resulting `.so` file will be placed in:
-   ```
-   build/addons/metamod/dlls/
-   ```
+ ```
+ build/addons/metamod/dlls/
+ ```
+
+### Using Clang with Ninja
+
+- This project can build with Clang as the system compiler. Enable it by turning on USE_CLANG when configuring with CMake.
+- Build steps (Linux):
+  1. Create a build directory
+     ```bash
+     mkdir build && cd build
+     ```
+  2. Configure with Ninja and Clang
+     ```bash
+     cmake -G Ninja -DUSE_CLANG=ON -DCMAKE_BUILD_TYPE=Release ..
+     ```
+  3. Build
+     ```bash
+     ninja
+     ```
+- If your host is aarch64 and you want to build a 32-bit ARM target, note that the toolchain must be able to produce 32-bit ARM binaries. The CMake configuration will warn you to install a 32-bit ARM cross-compiler (e.g. arm-linux-gnueabihf-gcc) and configure the toolchain accordingly.
+- To revert to GCC, simply configure without -DUSE_CLANG=ON.
 
 ### Output Artifacts
 

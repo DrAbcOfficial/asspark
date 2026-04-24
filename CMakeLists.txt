@@ -6,6 +6,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+# Compiler selection (Linux only)
+if(UNIX AND NOT APPLE)
+    option(USE_CLANG "Use Clang compiler instead of GCC" OFF)
+    if(USE_CLANG)
+        find_program(CLANG_C_COMPILER clang)
+        find_program(CLANG_CXX_COMPILER clang++)
+        if(CLANG_C_COMPILER AND CLANG_CXX_COMPILER)
+            set(CMAKE_C_COMPILER ${CLANG_C_COMPILER})
+            set(CMAKE_CXX_COMPILER ${CLANG_CXX_COMPILER})
+            message(STATUS "Using Clang compiler: ${CLANG_CXX_COMPILER}")
+        else()
+            message(FATAL_ERROR "Clang compiler not found. Install clang or disable USE_CLANG option.")
+        endif()
+    endif()
+endif()
+
 # Platform detection
 if(WIN32)
     set(PLATFORM_WINDOWS TRUE)
@@ -23,8 +39,9 @@ elseif(UNIX)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
         set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -m32")
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -marm")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -marm")
+        # aarch64编译器不支持-m32或-marm，需要安装armhf交叉编译器
+        # 或者使用aarch64原生编译（如果目标平台是aarch64）
+        message(WARNING "aarch64 detected. For 32-bit ARM build, install arm-linux-gnueabihf-gcc and set CMAKE_C_COMPILER/CMAKE_CXX_COMPILER")
     endif()
     
     # Linux: use Ninja backend
