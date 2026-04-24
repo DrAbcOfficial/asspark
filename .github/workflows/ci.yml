@@ -35,7 +35,7 @@ jobs:
           cd build
           ninja
       - name: Upload Linux artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux-asspark-so
           path: build/addons/metamod/dlls/asspark.so
@@ -56,7 +56,7 @@ jobs:
         run: |
           msbuild asspark.slnx /p:Configuration=Release /p:Platform=Win32
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-asspark-dll
           path: Release/asspark.dll
@@ -72,12 +72,12 @@ jobs:
         with:
           fetch-depth: 0
       - name: Download Linux asset
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: linux-asspark-so
           path: linux-out
       - name: Download Windows asset
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: windows-asspark-dll
           path: windows-out
