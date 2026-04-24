@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  linux-build:
+    name: Build Linux (32-bit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Init submodules
+        run: git submodule update --init --recursive
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build gcc-multilib g++-multilib
+      - name: Configure
+        run: |
+          mkdir -p build
+          cd build
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_C_FLAGS="-m32" \
+                -DCMAKE_CXX_FLAGS="-m32" ..
+      - name: Build
+        run: |
+          cd build
+          ninja
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-asspark-so
+          path: build/addons/metamod/dlls/asspark.so
+
+  windows-build:
+    name: Build Windows (32-bit)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Init submodules
+        shell: pwsh
+        run: git submodule update --init --recursive
+      - name: Setup MSBuild
+        uses: actions/setup-msbuild@v1
+      - name: Build
+        shell: pwsh
+        run: |
+          msbuild asspark.slnx /p:Configuration=Release /p:Platform=Win32
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-asspark-dll
+          path: Release/asspark.dll
+
+  release:
+    name: Release (tag)
+    needs: [linux-build, windows-build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Download Linux asset
+        uses: actions/download-artifact@v3
+        with:
+          name: linux-asspark-so
+          path: linux-out
+      - name: Download Windows asset
+        uses: actions/download-artifact@v3
+        with:
+          name: windows-asspark-dll
+          path: windows-out
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: |
+            linux-out/asspark.so
+            windows-out/asspark.dll
