@@ -1,12 +1,8 @@
 # asspark
 
-## Project Overview
-
 `asspark` is a **Metamod plugin** for the game **Sven Co-op**. It implements an **AngelScript profiler** (codenamed "SPARK") that measures script execution time by hooking into the AngelScript engine's context request/return cycle.
 
-The plugin is a standalone C++20 DLL project that sits at the repository root, separate from the `metamod/` submodule which contains the modified Metamod runtime and related plugins (`asext`, `fallguys`, `ascurl`, `asqcvar`, `asusermsg`).
-
-### What it does
+## Features
 
 - Hooks `asIScriptContext::Execute` (vtable index 5) via inline hooks provided by Metamod.
 - Records per-script-section, per-line, per-column timing statistics using `std::chrono::high_resolution_clock`.
@@ -16,7 +12,7 @@ The plugin is a standalone C++20 DLL project that sits at the repository root, s
   - `spark_clear` — clears aggregated statistics.
 - Registers a cvar `spark_on` (currently defined but not actively gating the hooks).
 
-### Hard dependency
+## Hard Dependency
 
 `asspark` **requires** the `asext` plugin (`asext.dll` / `asext.so`) to be loaded first, because it imports the `ASEXT_GetServerManager` and inline-hook utility APIs at runtime. `asext` is part of the `metamod/` submodule.
 
@@ -185,3 +181,7 @@ win32 addons/metamod/dlls/asspark.dll
 - **No unhook on detach**: `Meta_Detach` is a no-op; the inline hooks are not removed on plugin unload.
 - **x86 only**: The solution is configured strictly for Win32. There is no x64 or ARM build configuration.
 - **Linux 32-bit only**: Linux builds are restricted to 32-bit architectures (i386 and ARM).
+
+## License
+
+This project is licensed under the GNU General Public License v2.0 or later. See the source files for full copyright notices.
