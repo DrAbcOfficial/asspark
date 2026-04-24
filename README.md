@@ -203,4 +203,4 @@ win32 addons/metamod/dlls/asspark.dll
 
 ## License
 
-This project is licensed under the GNU General Public License v2.0 or later. See the source files for full copyright notices.
+This project is licensed under the GNU General Public License v3.0 or later. See the source files for full copyright notices.
