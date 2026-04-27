@@ -1,4 +1,8 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.15)
+
+set(CMAKE_C_COMPILER clang)
+set(CMAKE_CXX_COMPILER clang++)
+
 project(asspark LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -6,7 +10,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# Compiler selection (Linux only)
 if(UNIX AND NOT APPLE)
     option(USE_CLANG "Use Clang compiler instead of GCC" OFF)
     if(USE_CLANG)
@@ -22,33 +25,25 @@ if(UNIX AND NOT APPLE)
     endif()
 endif()
 
-# Platform detection
-if(WIN32)
-    set(PLATFORM_WINDOWS TRUE)
-    add_compile_definitions(PLATFORM_WINDOWS WIN32 _WINDOWS _USRDLL)
-    if(MSVC)
-        add_compile_options(/W3)
-    endif()
-elseif(UNIX)
-    set(PLATFORM_LINUX TRUE)
-    add_compile_definitions(PLATFORM_LINUX LINUX)
-    
-    # Linux: force 32-bit (i386/arm)
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
-        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -m32")
-    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64")
-        # aarch64编译器不支持-m32或-marm，需要安装armhf交叉编译器
-        # 或者使用aarch64原生编译（如果目标平台是aarch64）
-        message(WARNING "aarch64 detected. For 32-bit ARM build, install arm-linux-gnueabihf-gcc and set CMAKE_C_COMPILER/CMAKE_CXX_COMPILER")
-    endif()
-    
-    # Linux: use Ninja backend
-    set(CMAKE_GENERATOR "Ninja" CACHE INTERNAL "")
-endif()
+# if(WIN32)
+#     add_compile_definitions(WIN32 _WINDOWS _USRDLL)
+#     if(MSVC)
+#         add_compile_options(/W3)
+#     endif()
+# elseif(UNIX)
+#     add_compile_definitions(LINUX)
 
-# Configuration-specific definitions
+#     if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+#         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m32")
+#         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
+#         set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -m32")
+#     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|ARM64")
+#         message(WARNING "aarch64 detected. For 32-bit ARM build, install arm-linux-gnueabihf-gcc and set CMAKE_C_COMPILER/CMAKE_CXX_COMPILER")
+#     endif()
+
+#     set(CMAKE_GENERATOR "Ninja" CACHE INTERNAL "")
+# endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_compile_definitions(_DEBUG)
     if(MSVC)
@@ -66,10 +61,8 @@ else()
     endif()
 endif()
 
-# Common definitions
-add_compile_definitions(FALLGUYS_EXPORTS _CRT_SECURE_NO_WARNINGS NOMINMAX)
+add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX)
 
-# Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/metamod/hlsdk/common
     ${CMAKE_CURRENT_SOURCE_DIR}/metamod/hlsdk/dlls
@@ -80,26 +73,25 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/metamod/asext/include
 )
 
-# Source files
 set(SOURCES
     dllapi.cpp
     meta_api.cpp
+    profiler.cpp
+    hooks.cpp
+    commands.cpp
 )
 
-# Windows-specific source
 if(WIN32)
     list(APPEND SOURCES dllmain.cpp)
 endif()
 
-# Headers
 set(HEADERS
-    signatures.h
+    asspark.hpp
+    profiler.hpp
 )
 
-# Create shared library
 add_library(${PROJECT_NAME} SHARED ${SOURCES} ${HEADERS})
 
-# Windows-specific settings
 if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build/addons/metamod/dlls
@@ -111,22 +103,20 @@ if(WIN32)
     endif()
 endif()
 
-# Linux-specific settings
 if(UNIX)
     set_target_properties(${PROJECT_NAME} PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build/addons/metamod/dlls
-        PREFIX ""  # Remove 'lib' prefix for Linux shared libraries
+        PREFIX ""
         SUFFIX ".so"
     )
+
     target_link_libraries(${PROJECT_NAME} PRIVATE dl pthread)
 endif()
 
-# Link libraries
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE kernel32 user32 gdi32 winspool comdlg32 advapi32 shell32 ole32 oleaut32 uuid odbc32 odbccp32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE kernel32 user32)
 endif()
 
-# Post-build: copy to output directory (Windows only, Linux uses output directory directly)
 if(WIN32)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -135,7 +125,6 @@ if(WIN32)
     )
 endif()
 
-# Print configuration info
 message(STATUS "Platform: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "Architecture: ${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
